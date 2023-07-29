@@ -1,16 +1,16 @@
-# Foundry template
+# Remote Owner
 
-Template to kickstart a Foundry project.
+[![Code Coverage](https://github.com/generationsoftware/remote-owner/actions/workflows/coverage.yml/badge.svg)](https://github.com/generationsoftware/remote-owner/actions/workflows/coverage.yml)
+![MIT license](https://img.shields.io/badge/license-MIT-blue)
 
-## Getting started
+The Remote Owner contract allows an account one on chain to have a "remote" account on another chain using an [ERC-5164 compatible bridge](https://eips.ethereum.org/EIPS/eip-5164). The contract uses ERC-5164 so that the bridge layer is swappable.
 
-The easiest way to get started is by clicking the [Use this template](https://github.com/pooltogether/foundry-template/generate) button at the top right of this page.
+For example, this might be useful for a Governance system on Ethereum that wants extend itself to Optimism. Someone could deploy a RemoteOwner on Optimism and set the owner to be the Governance address and the fromChainId to be 1. The Governance system on Ethereum can then send execution messages through a ERC-5164 bridge layer to the RemoteOwner. The account would execute the transactions; effectively acting as Governance on Optimism.
 
-If you prefer to go the CLI way:
+Links
 
-```
-forge init my-project --template https://github.com/pooltogether/foundry-template
-```
+- [EIP-5164](https://eips.ethereum.org/EIPS/eip-5164) on Ethereum.org
+- [ERC-5164 Implementation](https://github.com/GenerationSoftware/ERC5164), includes adapters for the native Optimism, Arbitrum and Polygon bridges.  [Audited by Code Arena](https://github.com/code-423n4/2022-12-pooltogether)
 
 ## Development
 

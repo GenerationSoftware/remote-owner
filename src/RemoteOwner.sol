@@ -3,7 +3,30 @@ pragma solidity ^0.8.19;
 
 import { ExecutorAware } from "erc5164/abstract/ExecutorAware.sol";
 
-contract Erc5164Account is ExecutorAware {
+/* ============ Custom Errors ============ */
+
+/// @notice Thrown when the originChainId passed to the constructor is zero.
+error OriginChainIdZero();
+
+/// @notice Thrown when the OriginChainOwner address passed to the constructor is zero address.
+error OriginChainOwnerZeroAddress();
+
+/// @notice Thrown when the message was dispatched from an unsupported chain ID.
+error OriginChainIdUnsupported(uint256 fromChainId);
+
+/// @notice Thrown when the message was not executed by the executor.
+error LocalSenderNotExecutor(address sender);
+
+/// @notice Thrown when the message was not dispatched by the OriginChainOwner on the origin chain.
+error OriginSenderNotOwner(address sender);
+
+/// @notice Thrown when the call to the target contract failed.
+error CallFailed(bytes returnData);
+
+/// @title RemoteOwner
+/// @author G9 Software Inc.
+/// @notice RemoteOwner is a contract 
+contract RemoteOwner is ExecutorAware {
   /* ============ Events ============ */
 
   /**
@@ -11,26 +34,6 @@ contract Erc5164Account is ExecutorAware {
    * @param owner Address of the OriginChainOwner
    */
   event OriginChainOwnerSet(address owner);
-
-  /* ============ Custom Errors ============ */
-
-  /// @notice Thrown when the originChainId passed to the constructor is zero.
-  error OriginChainIdZero();
-
-  /// @notice Thrown when the OriginChainOwner address passed to the constructor is zero address.
-  error OriginChainOwnerZeroAddress();
-
-  /// @notice Thrown when the executor address passed to the constructor is the zero address.
-  error ExecutorZeroAddress();
-
-  /// @notice Thrown when the message was dispatched from an unsupported chain ID.
-  error OriginChainIdUnsupported(uint256 fromChainId);
-
-  /// @notice Thrown when the message was not executed by the executor.
-  error LocalSenderNotExecutor(address sender);
-
-  /// @notice Thrown when the message was not dispatched by the OriginChainOwner on the origin chain.
-  error OriginSenderNotOwner(address sender);
 
   /* ============ Variables ============ */
 
@@ -51,17 +54,24 @@ contract Erc5164Account is ExecutorAware {
     address __originChainOwner
   ) ExecutorAware(executor_) {
     if (originChainId_ == 0) revert OriginChainIdZero();
-    if (address(executor_) == address(0)) revert ExecutorZeroAddress();
     _originChainId = originChainId_;
     _setOriginChainOwner(__originChainOwner);
   }
 
   /* ============ External Functions ============ */
 
-  function execute(address target, uint256 value, bytes calldata data) external {
+  function execute(address target, uint256 value, bytes calldata data) external returns (bytes memory) {
+    // console2.log("EXECUTE");
+    // console2.logBytes(data);
     _checkSender();
     (bool success, bytes memory returnData) = target.call{ value: value }(data);
-    if (!success) revert(string(returnData));
+    // console2.log("success?", success);
+    // console2.logBytes(returnData);
+    // console2.log(abi.decode(returnData, (uint256)));
+    if (!success) revert CallFailed(returnData);
+    assembly {
+      return (add(returnData, 0x20), mload(returnData))
+    }
   }
 
   /**
@@ -72,11 +82,7 @@ contract Erc5164Account is ExecutorAware {
     return _originChainId;
   }
 
-  /**
-   * @notice Get the address of the OriginChainOwner on the origin chain.
-   * @return Address of the OriginChainOwner on the origin chain
-   */
-  function owner() external view returns (address) {
+  function originChainOwner() external view returns (address) {
     return _originChainOwner;
   }
 
@@ -109,8 +115,8 @@ contract Erc5164Account is ExecutorAware {
    *          - the sender on the origin chain is the DrawMangerAdapter
    */
   function _checkSender() internal view {
-    if (_fromChainId() != _originChainId) revert OriginChainIdUnsupported(_fromChainId());
     if (!isTrustedExecutor(msg.sender)) revert LocalSenderNotExecutor(msg.sender);
+    if (_fromChainId() != _originChainId) revert OriginChainIdUnsupported(_fromChainId());
     if (_msgSender() != address(_originChainOwner)) revert OriginSenderNotOwner(_msgSender());
   }
 }
