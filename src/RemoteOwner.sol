@@ -25,7 +25,7 @@ error CallFailed(bytes returnData);
 
 /// @title RemoteOwner
 /// @author G9 Software Inc.
-/// @notice RemoteOwner is a contract 
+/// @notice RemoteOwner allows a contract on one chain to control a contract on another chain.
 contract RemoteOwner is ExecutorAware {
   /* ============ Events ============ */
 
