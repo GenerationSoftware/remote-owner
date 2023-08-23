@@ -11,8 +11,5 @@ library RemoteOwnerCallEncoder {
             value,
             data
         );
-        // assembly {
-        //    return (add(returnData, 0x20), mload(returnData))
-        // }
     }
 }
