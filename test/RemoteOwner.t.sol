@@ -20,6 +20,8 @@ import { RemoteOwnerCallEncoder } from "../src/libraries/RemoteOwnerCallEncoder.
 /// @dev See the "Writing Tests" section in the Foundry Book if this is your first time with Forge.
 /// https://book.getfoundry.sh/forge/writing-tests
 contract RemoteOwnerTest is Test {
+
+  event Received(address from, uint256 value);
   
   RemoteOwner account;
 
@@ -66,6 +68,13 @@ contract RemoteOwnerTest is Test {
     new RemoteOwner(1, address(this), address(0));
   }
 
+  function testReceiveEther() public {
+    vm.expectEmit();
+    emit Received(address(this), 1000);
+    (bool sent,) = address(account).call{value: 1000}(""); // send ether
+    assertEq(sent, true);
+  }
+
   function testExecute() public {
     (bool success, bytes memory result) = address(account).call(executeData);
     assertTrue(success, "was true");
@@ -99,7 +108,7 @@ contract RemoteOwnerTest is Test {
 
   function testSetOriginChainOwner() public {
     executeData = abi.encodePacked(abi.encodeWithSelector(account.setOriginChainOwner.selector, imposter), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
-    (bool success, bytes memory returnData) = address(account).call(executeData);
+    (bool success,) = address(account).call(executeData);
     assertTrue(success, "was successful");
     assertEq(account.originChainOwner(), imposter);
   }

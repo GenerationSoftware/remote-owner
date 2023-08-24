@@ -20,7 +20,7 @@ contract RemoteOwnerTest is Test {
     function setUp() public {
         wrapper = new RemoteOwnerCallEncoderWrapper();
         target = makeAddr("target");
-        remoteOwner = RemoteOwner(makeAddr("remoteOwner"));
+        remoteOwner = RemoteOwner(payable(makeAddr("remoteOwner")));
         vm.etch(address(remoteOwner), "remoteOwner");
     }
 
