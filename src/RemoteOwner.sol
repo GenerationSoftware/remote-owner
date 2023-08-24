@@ -35,6 +35,13 @@ contract RemoteOwner is ExecutorAware {
    */
   event OriginChainOwnerSet(address owner);
 
+  /**
+   * @notice Emitted when ether is received to this contract via the `receive` function.
+   * @param from The sender of the ether
+   * @param value The value received
+   */
+  event Received(address from, uint256 value);
+
   /* ============ Variables ============ */
 
   /// @notice ID of the origin chain that dispatches the auction auction results and random number.
@@ -56,6 +63,13 @@ contract RemoteOwner is ExecutorAware {
     if (originChainId_ == 0) revert OriginChainIdZero();
     _originChainId = originChainId_;
     _setOriginChainOwner(__originChainOwner);
+  }
+
+  /* ============ Receive Ether Function ============ */
+
+  /// @dev Emits a `Received` event
+  receive() external payable {
+    emit Received(msg.sender, msg.value);
   }
 
   /* ============ External Functions ============ */
