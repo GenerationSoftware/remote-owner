@@ -4,14 +4,13 @@ pragma solidity 0.8.19;
 import "forge-std/Test.sol";
 import { console2 } from "forge-std/console2.sol";
 
-
 import {
   RemoteOwner,
   OriginChainIdZero,
   LocalSenderNotExecutor,
   OriginChainIdUnsupported,
   OriginSenderNotOwner,
-  OriginChainOwnerZeroAddress,
+  OwnerZeroAddress,
   CallFailed
 } from "../src/RemoteOwner.sol";
 
@@ -22,6 +21,8 @@ import { RemoteOwnerCallEncoder } from "../src/libraries/RemoteOwnerCallEncoder.
 contract RemoteOwnerTest is Test {
 
   event Received(address from, uint256 value);
+  event OwnershipOffered(address indexed pendingOwner);
+  event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
   
   RemoteOwner account;
 
@@ -50,7 +51,7 @@ contract RemoteOwnerTest is Test {
 
   function testConstructor() public {
     assertEq(account.originChainId(), 1);
-    assertEq(account.originChainOwner(), originChainOwner);
+    assertEq(account.owner(), originChainOwner);
   }
 
   function testConstructor_OriginChainIdZero() public {
@@ -63,8 +64,8 @@ contract RemoteOwnerTest is Test {
     new RemoteOwner(1, address(0), originChainOwner);
   }
 
-  function testConstructor_OriginChainOwnerZeroAddress() public {
-    vm.expectRevert(abi.encodeWithSelector(OriginChainOwnerZeroAddress.selector));
+  function testConstructor_OwnerZeroAddress() public {
+    vm.expectRevert(abi.encodeWithSelector(OwnerZeroAddress.selector));
     new RemoteOwner(1, address(this), address(0));
   }
 
@@ -106,25 +107,68 @@ contract RemoteOwnerTest is Test {
     address(account).call(executeData);
   }
 
-  function testSetOriginChainOwner() public {
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.setOriginChainOwner.selector, imposter), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
-    (bool success,) = address(account).call(executeData);
+  function testTransferOwnership_success() public {
+    vm.expectEmit(true, true, true, true);
+    emit OwnershipOffered(imposter);
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferOwnership.selector, imposter), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    (bool success, bytes memory returnData) = address(account).call(executeData);
     assertTrue(success, "was successful");
-    assertEq(account.originChainOwner(), imposter);
+    assertEq(account.pendingOwner(), imposter);
   }
 
-  function testSetOriginChainOwner_invalidSender() public {
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.setOriginChainOwner.selector, imposter), bytes32(uint256(0x1234)), uint256(1), imposter);
+  function testTransferOwnership_LocalSenderNotExecutor() public {
+    vm.startPrank(imposter);
+    vm.expectRevert(abi.encodeWithSelector(LocalSenderNotExecutor.selector, imposter));
+    account.transferOwnership(imposter);
+  }
+
+  function testTransferOwnership_invalidSender() public {
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferOwnership.selector, imposter), bytes32(uint256(0x1234)), uint256(1), imposter);
     (bool success, bytes memory returnData) = address(account).call(executeData);
     assertFalse(success, "failed");
     assertEq(returnData, abi.encodeWithSelector(OriginSenderNotOwner.selector, imposter));
   }
 
-  function testSetOriginChainOwner_newOwnerZeroAddress() public {
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.setOriginChainOwner.selector, address(0)), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+  function testTransferOwnership_newOwnerZeroAddress() public {
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferOwnership.selector, address(0)), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
     (bool success, bytes memory returnData) = address(account).call(executeData);
     assertFalse(success, "failed");
-    assertEq(returnData, abi.encodeWithSelector(OriginChainOwnerZeroAddress.selector));
+    assertEq(returnData, abi.encodeWithSelector(OwnerZeroAddress.selector));
+  }
+
+  function testClaimOwnership() public {
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferOwnership.selector, imposter), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    (bool success, bytes memory returnData) = address(account).call(executeData);
+    assertTrue(success, "transfer success");
+
+    vm.expectEmit(true, true, true, true);
+    emit OwnershipTransferred(originChainOwner, imposter);
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.claimOwnership.selector), bytes32(uint256(0x1234)), uint256(1), imposter);
+    (success, returnData) = address(account).call(executeData);
+    assertTrue(success, "claim success");
+
+    assertEq(account.owner(), imposter);
+    assertEq(account.pendingOwner(), address(0));
+  }
+
+  function testClaimOwnership_LocalSenderNotExecutor() public {
+    vm.startPrank(imposter);
+    vm.expectRevert(abi.encodeWithSelector(LocalSenderNotExecutor.selector, imposter));
+    account.claimOwnership();
+  }
+
+  function testRenounceOwnership() public {
+    vm.expectEmit(true, true, true, true);
+    emit OwnershipTransferred(originChainOwner, address(0));
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.renounceOwnership.selector), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    (bool success, bytes memory returnData) = address(account).call(executeData);
+    assertTrue(success, "transfer success");
+  }
+
+  function testRenounceOwnership_LocalSenderNotExecutor() public {
+    vm.startPrank(imposter);
+    vm.expectRevert(abi.encodeWithSelector(LocalSenderNotExecutor.selector, imposter));
+    account.renounceOwnership();
   }
 
 }

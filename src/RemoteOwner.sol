@@ -8,8 +8,8 @@ import { ExecutorAware } from "erc5164-interfaces/abstract/ExecutorAware.sol";
 /// @notice Thrown when the originChainId passed to the constructor is zero.
 error OriginChainIdZero();
 
-/// @notice Thrown when the OriginChainOwner address passed to the constructor is zero address.
-error OriginChainOwnerZeroAddress();
+/// @notice Thrown when the Owner address passed to the constructor is zero address.
+error OwnerZeroAddress();
 
 /// @notice Thrown when the message was dispatched from an unsupported chain ID.
 error OriginChainIdUnsupported(uint256 fromChainId);
@@ -17,8 +17,11 @@ error OriginChainIdUnsupported(uint256 fromChainId);
 /// @notice Thrown when the message was not executed by the executor.
 error LocalSenderNotExecutor(address sender);
 
-/// @notice Thrown when the message was not dispatched by the OriginChainOwner on the origin chain.
+/// @notice Thrown when the message was not dispatched by the Owner on the origin chain.
 error OriginSenderNotOwner(address sender);
+
+/// @notice Thrown when the message was not dispatched by the pending owner on the origin chain.
+error OriginSenderNotPendingOwner(address sender);
 
 /// @notice Thrown when the call to the target contract failed.
 error CallFailed(bytes returnData);
@@ -27,13 +30,21 @@ error CallFailed(bytes returnData);
 /// @author G9 Software Inc.
 /// @notice RemoteOwner allows a contract on one chain to control a contract on another chain.
 contract RemoteOwner is ExecutorAware {
+
   /* ============ Events ============ */
 
   /**
-   * @notice Emitted when the OriginChainOwner has been set.
-   * @param owner Address of the OriginChainOwner
-   */
-  event OriginChainOwnerSet(address owner);
+    * @dev Emitted when `_pendingOwner` has been changed.
+    * @param pendingOwner new `_pendingOwner` address.
+    */
+  event OwnershipOffered(address indexed pendingOwner);
+
+  /**
+    * @dev Emitted when `_owner` has been changed.
+    * @param previousOwner previous `_owner` address.
+    * @param newOwner new `_owner` address.
+    */
+  event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
   /**
    * @notice Emitted when ether is received to this contract via the `receive` function.
@@ -47,8 +58,9 @@ contract RemoteOwner is ExecutorAware {
   /// @notice ID of the origin chain that dispatches the auction auction results and random number.
   uint256 internal immutable _originChainId;
 
-  /// @notice Address of the OriginChainOwner on the origin chain that dispatches the auction auction results and random number.
-  address internal _originChainOwner;
+  /// @notice Address of the Owner on the origin chain that dispatches the auction results and random number.
+  address private _owner;
+  address private _pendingOwner;
 
   /* ============ Constructor ============ */
 
@@ -58,11 +70,12 @@ contract RemoteOwner is ExecutorAware {
   constructor(
     uint256 originChainId_,
     address executor_,
-    address __originChainOwner
+    address __owner
   ) ExecutorAware(executor_) {
+    if (__owner == address(0)) revert OwnerZeroAddress();
     if (originChainId_ == 0) revert OriginChainIdZero();
     _originChainId = originChainId_;
-    _setOriginChainOwner(__originChainOwner);
+    _setOwner(__owner);
   }
 
   /* ============ Receive Ether Function ============ */
@@ -74,19 +87,53 @@ contract RemoteOwner is ExecutorAware {
 
   /* ============ External Functions ============ */
 
-  function execute(address target, uint256 value, bytes calldata data) external returns (bytes memory) {
-    // console2.log("EXECUTE");
-    // console2.logBytes(data);
-    _checkSender();
+  /**
+   * @notice Executes a call on the target contract. Can only be called by the owner from the origin chain.
+   * @param target The address to call
+   * @param value Any eth value to pass along with the call
+   * @param data The calldata
+   * @return The return data of the call
+   */
+  function execute(address target, uint256 value, bytes calldata data) external onlyExecutorAndOriginChain onlyOwner returns (bytes memory) {
     (bool success, bytes memory returnData) = target.call{ value: value }(data);
-    // console2.log("success?", success);
-    // console2.logBytes(returnData);
-    // console2.log(abi.decode(returnData, (uint256)));
     if (!success) revert CallFailed(returnData);
     assembly {
       return (add(returnData, 0x20), mload(returnData))
     }
   }
+
+  /**
+    * @notice Renounce ownership of the contract.
+    * @dev Leaves the contract without owner. It will not be possible to call
+    * `onlyOwner` functions anymore. Can only be called by the current owner.
+    *
+    * NOTE: Renouncing ownership will leave the contract without an owner,
+    * thereby removing any functionality that is only available to the owner.
+    */
+  function renounceOwnership() external virtual onlyExecutorAndOriginChain onlyOwner {
+      _setOwner(address(0));
+  }
+
+  /**
+   * @notice Transfer ownership to another origin chain account
+   * @param _newOwner Address of the new owner
+   */
+  function transferOwnership(address _newOwner) external onlyExecutorAndOriginChain onlyOwner {
+    if (_newOwner == address(0)) revert OwnerZeroAddress();
+    _pendingOwner = _newOwner;
+    emit OwnershipOffered(_newOwner);
+  }
+
+  /**
+  * @notice Allows the `_pendingOwner` address to finalize the transfer.
+  * @dev This function is only callable by the `_pendingOwner`.
+  */
+  function claimOwnership() external onlyExecutorAndOriginChain onlyPendingOwner {
+      _setOwner(_pendingOwner);
+      _pendingOwner = address(0);
+  }
+
+  /* ============ Getters ============ */
 
   /**
    * @notice Get the ID of the origin chain.
@@ -96,41 +143,57 @@ contract RemoteOwner is ExecutorAware {
     return _originChainId;
   }
 
-  function originChainOwner() external view returns (address) {
-    return _originChainOwner;
+  /**
+   * @notice The owner address. This address is on the origin chain.
+   * @return The owner address
+   */
+  function owner() external view returns (address) {
+    return _owner;
   }
 
-  /* ============ Setters ============ */
-
   /**
-   * @notice Set the OriginChainOwner address.
-   * @dev Can only be called once.
-   *      If the transaction get front-run at deployment, we can always re-deploy the contract.
-   */
-  function setOriginChainOwner(address _newOriginChainOwner) external {
-    _checkSender();
-    _setOriginChainOwner(_newOriginChainOwner);
+    * @notice Gets current `_pendingOwner`.
+    * @return Current `_pendingOwner` address.
+    */
+  function pendingOwner() external view virtual returns (address) {
+      return _pendingOwner;
   }
 
   /* ============ Internal Functions ============ */
 
-  function _setOriginChainOwner(address _newOriginChainOwner) internal {
-    if (_newOriginChainOwner == address(0)) revert OriginChainOwnerZeroAddress();
+  /**
+   * @notice Sets the owner of the contract.
+   * @param _newOwner Address of the new owner
+   */
+  function _setOwner(address _newOwner) internal {
+    address _oldOwner = _owner;
+    _owner = _newOwner;
 
-    _originChainOwner = _newOriginChainOwner;
-
-    emit OriginChainOwnerSet(_newOriginChainOwner);
+    emit OwnershipTransferred(_oldOwner, _newOwner);
   }
 
   /**
-   * @notice Checks that:
-   *          - the call has been dispatched from the supported chain
-   *          - the sender on the receiving chain is the executor
-   *          - the sender on the origin chain is the DrawMangerAdapter
+   * @notice Asserts that the caller is the 5164 executor, and that the origin chain id is correct.
    */
-  function _checkSender() internal view {
+  modifier onlyExecutorAndOriginChain() {
     if (!isTrustedExecutor(msg.sender)) revert LocalSenderNotExecutor(msg.sender);
     if (_fromChainId() != _originChainId) revert OriginChainIdUnsupported(_fromChainId());
-    if (_msgSender() != address(_originChainOwner)) revert OriginSenderNotOwner(_msgSender());
+    _;
+  }
+
+  /**
+   * @notice Asserts that the 5164 sender matches the current owner
+   */
+  modifier onlyOwner() {
+    if (_msgSender() != address(_owner)) revert OriginSenderNotOwner(_msgSender());
+    _;
+  }
+
+  /**
+   * @notice Asserts that the 5164 sender matches the pending owner
+   */
+  modifier onlyPendingOwner() {
+    if (_msgSender() != address(_pendingOwner)) revert OriginSenderNotPendingOwner(_msgSender());
+    _;
   }
 }
