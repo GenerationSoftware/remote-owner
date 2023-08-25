@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import { ExecutorAware } from "erc5164/abstract/ExecutorAware.sol";
+import { ExecutorAware } from "erc5164-interfaces/abstract/ExecutorAware.sol";
 
 /* ============ Custom Errors ============ */
 

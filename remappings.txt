@@ -1,3 +1,3 @@
 ds-test/=lib/forge-std/lib/ds-test/src/
 forge-std/=lib/forge-std/src/
-erc5164=lib/ERC5164/src/
+erc5164-interfaces=lib/erc5164-interfaces/src/
