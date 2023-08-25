@@ -58,7 +58,7 @@ contract RemoteOwner is ExecutorAware {
   /// @notice ID of the origin chain that dispatches the auction auction results and random number.
   uint256 internal immutable _originChainId;
 
-  /// @notice Address of the Owner on the origin chain that dispatches the auction auction results and random number.
+  /// @notice Address of the Owner on the origin chain that dispatches the auction results and random number.
   address private _owner;
   address private _pendingOwner;
 
