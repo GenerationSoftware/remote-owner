@@ -87,6 +87,13 @@ contract RemoteOwner is ExecutorAware {
 
   /* ============ External Functions ============ */
 
+  /**
+   * @notice Executes a call on the target contract. Can only be called by the owner from the origin chain.
+   * @param target The address to call
+   * @param value Any eth value to pass along with the call
+   * @param data The calldata
+   * @return The return data of the call
+   */
   function execute(address target, uint256 value, bytes calldata data) external onlyExecutorAndOriginChain onlyOwner returns (bytes memory) {
     (bool success, bytes memory returnData) = target.call{ value: value }(data);
     if (!success) revert CallFailed(returnData);
@@ -108,9 +115,8 @@ contract RemoteOwner is ExecutorAware {
   }
 
   /**
-   * @notice Set the Owner address.
-   * @dev Can only be called once.
-   *      If the transaction get front-run at deployment, we can always re-deploy the contract.
+   * @notice Transfer ownership to another origin chain account
+   * @param _newOwner Address of the new owner
    */
   function transferOwnership(address _newOwner) external onlyExecutorAndOriginChain onlyOwner {
     if (_newOwner == address(0)) revert OwnerZeroAddress();
@@ -137,6 +143,10 @@ contract RemoteOwner is ExecutorAware {
     return _originChainId;
   }
 
+  /**
+   * @notice The owner address. This address is on the origin chain.
+   * @return The owner address
+   */
   function owner() external view returns (address) {
     return _owner;
   }
@@ -151,6 +161,10 @@ contract RemoteOwner is ExecutorAware {
 
   /* ============ Internal Functions ============ */
 
+  /**
+   * @notice Sets the owner of the contract.
+   * @param _newOwner Address of the new owner
+   */
   function _setOwner(address _newOwner) internal {
     address _oldOwner = _owner;
     _owner = _newOwner;
@@ -158,6 +172,9 @@ contract RemoteOwner is ExecutorAware {
     emit OwnershipTransferred(_oldOwner, _newOwner);
   }
 
+  /**
+   * @notice Asserts that the caller is the 5164 executor, and that the origin chain id is correct.
+   */
   modifier onlyExecutorAndOriginChain() {
     if (!isTrustedExecutor(msg.sender)) revert LocalSenderNotExecutor(msg.sender);
     if (_fromChainId() != _originChainId) revert OriginChainIdUnsupported(_fromChainId());
@@ -165,10 +182,7 @@ contract RemoteOwner is ExecutorAware {
   }
 
   /**
-   * @notice Checks that:
-   *          - the call has been dispatched from the supported chain
-   *          - the sender on the receiving chain is the executor
-   *          - the sender on the origin chain is the owner
+   * @notice Asserts that the 5164 sender matches the current owner
    */
   modifier onlyOwner() {
     if (_msgSender() != address(_owner)) revert OriginSenderNotOwner(_msgSender());
@@ -176,10 +190,7 @@ contract RemoteOwner is ExecutorAware {
   }
 
   /**
-   * @notice Checks that:
-   *          - the call has been dispatched from the supported chain
-   *          - the sender on the receiving chain is the executor
-   *          - the sender on the origin chain is the pending owner
+   * @notice Asserts that the 5164 sender matches the pending owner
    */
   modifier onlyPendingOwner() {
     if (_msgSender() != address(_pendingOwner)) revert OriginSenderNotPendingOwner(_msgSender());
