@@ -14,11 +14,13 @@ library RemoteOwnerCallEncoder {
     /// @param data The data that RemoteOwner will call `target` with
     /// @return The encoded calldata
     function encodeCalldata(address target, uint256 value, bytes memory data) internal pure returns (bytes memory) {
-        return abi.encodeWithSelector(
-            RemoteOwner.execute.selector,
-            target,
-            value,
-            data
+        return abi.encodeCall(
+            RemoteOwner.execute,
+            (
+                target,
+                value,
+                data
+            )
         );
     }
 }
