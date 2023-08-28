@@ -51,7 +51,7 @@ contract RemoteOwner is ExecutorAware {
    * @param from The sender of the ether
    * @param value The value received
    */
-  event Received(address from, uint256 value);
+  event Received(address indexed from, uint256 value);
 
   /* ============ Variables ============ */
 
