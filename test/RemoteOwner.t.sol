@@ -11,8 +11,11 @@ import {
   OriginChainIdUnsupported,
   OriginSenderNotOwner,
   OwnerZeroAddress,
-  CallFailed
+  CallFailed,
+  LocalSenderNotPendingExecutor
 } from "../src/RemoteOwner.sol";
+
+import { ExecutorZeroAddress } from "erc5164-interfaces/abstract/ExecutorAware.sol";
 
 import { RemoteOwnerCallEncoder } from "../src/libraries/RemoteOwnerCallEncoder.sol";
 
@@ -23,12 +26,15 @@ contract RemoteOwnerTest is Test {
   event Received(address from, uint256 value);
   event OwnershipOffered(address indexed pendingOwner);
   event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+  event PendingExecutorPermissionTransfer(address indexed pendingTrustedExecutor);
+  event SetTrustedExecutor(address indexed previousExecutor, address indexed newExecutor);
   
   RemoteOwner account;
 
   address originChainOwner;
 
   address imposter;
+  address executor2;
 
   address recipient;
 
@@ -38,6 +44,7 @@ contract RemoteOwnerTest is Test {
   function setUp() public {
     originChainOwner = makeAddr("originChainOwner");
     imposter = makeAddr("imposter");
+    executor2 = makeAddr("executor2");
 
     account = new RemoteOwner(1, address(this), originChainOwner);
 
@@ -60,7 +67,7 @@ contract RemoteOwnerTest is Test {
   }
 
   function testConstructor_ExecutorZeroAddress() public {
-    vm.expectRevert("executor-not-zero-address");
+    vm.expectRevert(abi.encodeWithSelector(ExecutorZeroAddress.selector));
     new RemoteOwner(1, address(0), originChainOwner);
   }
 
@@ -169,6 +176,72 @@ contract RemoteOwnerTest is Test {
     vm.startPrank(imposter);
     vm.expectRevert(abi.encodeWithSelector(LocalSenderNotExecutor.selector, imposter));
     account.renounceOwnership();
+  }
+
+  function testTransferExecutorPermission_success() public {
+    vm.expectEmit();
+    emit PendingExecutorPermissionTransfer(executor2);
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferExecutorPermission.selector, executor2), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    (bool success, bytes memory returnData) = address(account).call(executeData);
+    assertTrue(success, "was successful");
+    assertEq(account.trustedExecutor(), address(this));
+    assertEq(account.pendingTrustedExecutor(), executor2);
+  }
+
+  function testTransferExecutorPermission_LocalSenderNotExecutor() public {
+    vm.startPrank(imposter);
+    vm.expectRevert(abi.encodeWithSelector(LocalSenderNotExecutor.selector, imposter));
+    account.transferExecutorPermission(executor2);
+  }
+
+  function testTransferExecutorPermission_invalidSender() public {
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferExecutorPermission.selector, executor2), bytes32(uint256(0x1234)), uint256(1), imposter);
+    (bool success, bytes memory returnData) = address(account).call(executeData);
+    assertFalse(success, "failed");
+    assertEq(returnData, abi.encodeWithSelector(OriginSenderNotOwner.selector, imposter));
+  }
+
+  function testTransferExecutorPermission_newExecutorZeroAddress() public {
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferExecutorPermission.selector, address(0)), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    (bool success, bytes memory returnData) = address(account).call(executeData);
+    assertFalse(success, "failed");
+    assertEq(returnData, abi.encodeWithSelector(ExecutorZeroAddress.selector));
+  }
+
+  function testClaimExecutorPermission() public {
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferExecutorPermission.selector, executor2), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    (bool success, bytes memory returnData) = address(account).call(executeData);
+    assertTrue(success, "declaration success");
+    assertEq(account.trustedExecutor(), address(this));
+    assertEq(account.pendingTrustedExecutor(), address(executor2));
+
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.claimExecutorPermission.selector), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    vm.expectEmit();
+    emit SetTrustedExecutor(address(this), executor2);
+    vm.startPrank(executor2);
+    (success, returnData) = address(account).call(executeData);
+    vm.stopPrank();
+    assertTrue(success, "activation success");
+
+    assertEq(account.trustedExecutor(), executor2);
+    assertEq(account.pendingTrustedExecutor(), address(0));
+  }
+
+  function testClaimExecutorPermission_LocalSenderNotPendingExecutor() public {
+    vm.expectRevert(abi.encodeWithSelector(LocalSenderNotPendingExecutor.selector, address(this)));
+    account.claimExecutorPermission();
+  }
+
+  function testClaimExecutorPermission_OriginSenderNotOwner() public {
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferExecutorPermission.selector, executor2), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    (bool success, bytes memory returnData) = address(account).call(executeData);
+    assertTrue(success, "declaration success");
+
+    vm.startPrank(executor2);
+    executeData = abi.encodePacked(abi.encodeWithSelector(account.claimExecutorPermission.selector), bytes32(uint256(0x1234)), uint256(1), imposter);
+    vm.expectRevert(abi.encodeWithSelector(OriginSenderNotOwner.selector, imposter));
+    address(account).call(executeData);
+    vm.stopPrank();
   }
 
 }

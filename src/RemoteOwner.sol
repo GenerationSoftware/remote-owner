@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import { ExecutorAware } from "erc5164-interfaces/abstract/ExecutorAware.sol";
+import { ExecutorAware, ExecutorZeroAddress } from "erc5164-interfaces/abstract/ExecutorAware.sol";
+import { ExecutorParserLib } from "erc5164-interfaces/libraries/ExecutorParserLib.sol";
 
 /* ============ Custom Errors ============ */
 
@@ -16,6 +17,9 @@ error OriginChainIdUnsupported(uint256 fromChainId);
 
 /// @notice Thrown when the message was not executed by the executor.
 error LocalSenderNotExecutor(address sender);
+
+/// @notice Thrown when the message was not executed by the pending executor.
+error LocalSenderNotPendingExecutor(address sender);
 
 /// @notice Thrown when the message was not dispatched by the Owner on the origin chain.
 error OriginSenderNotOwner(address sender);
@@ -47,6 +51,12 @@ contract RemoteOwner is ExecutorAware {
   event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
   /**
+    * @dev Emitted when `_pendingExecutor` has been declared by the owner.
+    * @param pendingTrustedExecutor the pending trusted executor address.
+    */
+  event PendingExecutorPermissionTransfer(address indexed pendingTrustedExecutor);
+
+  /**
    * @notice Emitted when ether is received to this contract via the `receive` function.
    * @param from The sender of the ether
    * @param value The value received
@@ -60,7 +70,12 @@ contract RemoteOwner is ExecutorAware {
 
   /// @notice Address of the Owner on the origin chain that dispatches the auction results and random number.
   address private _owner;
+
+  /// @notice Address of the new pending owner.
   address private _pendingOwner;
+
+  /// @notice Address of the new pending trusted executor.
+  address private _pendingExecutor;
 
   /* ============ Constructor ============ */
 
@@ -111,7 +126,7 @@ contract RemoteOwner is ExecutorAware {
     * thereby removing any functionality that is only available to the owner.
     */
   function renounceOwnership() external virtual onlyExecutorAndOriginChain onlyOwner {
-      _setOwner(address(0));
+    _setOwner(address(0));
   }
 
   /**
@@ -129,8 +144,29 @@ contract RemoteOwner is ExecutorAware {
   * @dev This function is only callable by the `_pendingOwner`.
   */
   function claimOwnership() external onlyExecutorAndOriginChain onlyPendingOwner {
-      _setOwner(_pendingOwner);
-      _pendingOwner = address(0);
+    _setOwner(_pendingOwner);
+    delete _pendingOwner;
+  }
+
+  /**
+   * @notice Transfers the executor permission to a new address.
+   * @dev The owner must successfully call `claimExecutorPermission` through the new executor
+   * to complete the transfer.
+   * @param _executor Address of the new executor
+   */
+  function transferExecutorPermission(address _executor) external onlyExecutorAndOriginChain onlyOwner {
+    if (_executor == address(0)) revert ExecutorZeroAddress();
+    _pendingExecutor = _executor;
+    emit PendingExecutorPermissionTransfer(_executor);
+  }
+
+  /**
+   * @notice Activates the pending executor.
+   * @dev This can only be called by the owner through the pending executor.
+   */
+  function claimExecutorPermission() external onlyPendingExecutorAndOriginChain onlyOwner {
+    _setTrustedExecutor(_pendingExecutor);
+    delete _pendingExecutor;
   }
 
   /* ============ Getters ============ */
@@ -156,7 +192,15 @@ contract RemoteOwner is ExecutorAware {
     * @return Current `_pendingOwner` address.
     */
   function pendingOwner() external view virtual returns (address) {
-      return _pendingOwner;
+    return _pendingOwner;
+  }
+
+  /**
+    * @notice Gets current `_pendingExecutor`.
+    * @return Current `_pendingExecutor` address.
+    */
+  function pendingTrustedExecutor() external view virtual returns (address) {
+    return _pendingExecutor;
   }
 
   /* ============ Internal Functions ============ */
@@ -177,7 +221,16 @@ contract RemoteOwner is ExecutorAware {
    */
   modifier onlyExecutorAndOriginChain() {
     if (!isTrustedExecutor(msg.sender)) revert LocalSenderNotExecutor(msg.sender);
-    if (_fromChainId() != _originChainId) revert OriginChainIdUnsupported(_fromChainId());
+    if (ExecutorParserLib.fromChainId() != _originChainId) revert OriginChainIdUnsupported(ExecutorParserLib.fromChainId());
+    _;
+  }
+
+  /**
+   * @notice Asserts that the caller is the pending 5164 executor, and that the origin chain id is correct.
+   */
+  modifier onlyPendingExecutorAndOriginChain() {
+    if (msg.sender != _pendingExecutor) revert LocalSenderNotPendingExecutor(msg.sender);
+    if (ExecutorParserLib.fromChainId() != _originChainId) revert OriginChainIdUnsupported(ExecutorParserLib.fromChainId());
     _;
   }
 
@@ -185,7 +238,7 @@ contract RemoteOwner is ExecutorAware {
    * @notice Asserts that the 5164 sender matches the current owner
    */
   modifier onlyOwner() {
-    if (_msgSender() != address(_owner)) revert OriginSenderNotOwner(_msgSender());
+    if (ExecutorParserLib.msgSender() != address(_owner)) revert OriginSenderNotOwner(ExecutorParserLib.msgSender());
     _;
   }
 
@@ -193,7 +246,7 @@ contract RemoteOwner is ExecutorAware {
    * @notice Asserts that the 5164 sender matches the pending owner
    */
   modifier onlyPendingOwner() {
-    if (_msgSender() != address(_pendingOwner)) revert OriginSenderNotPendingOwner(_msgSender());
+    if (ExecutorParserLib.msgSender() != address(_pendingOwner)) revert OriginSenderNotPendingOwner(ExecutorParserLib.msgSender());
     _;
   }
 }
