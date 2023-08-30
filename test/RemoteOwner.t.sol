@@ -20,7 +20,7 @@ import { RemoteOwnerCallEncoder } from "../src/libraries/RemoteOwnerCallEncoder.
 /// https://book.getfoundry.sh/forge/writing-tests
 contract RemoteOwnerTest is Test {
 
-  event Received(address from, uint256 value);
+  event Received(address indexed from, uint256 value);
   event OwnershipOffered(address indexed pendingOwner);
   event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
   
