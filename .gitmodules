@@ -5,3 +5,4 @@
 [submodule "lib/erc5164-interfaces"]
 	path = lib/erc5164-interfaces
 	url = https://github.com/generationsoftware/erc5164-interfaces
+	branch = gen-563-remote-owner-owner-should-be-able-to-change-the-executor
