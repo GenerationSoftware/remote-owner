@@ -5,4 +5,4 @@
 [submodule "lib/erc5164-interfaces"]
 	path = lib/erc5164-interfaces
 	url = https://github.com/generationsoftware/erc5164-interfaces
-	branch = prod-testnet-2
+	branch = prod-testnet-3
