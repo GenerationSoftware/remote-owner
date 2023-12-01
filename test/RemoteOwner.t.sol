@@ -4,16 +4,7 @@ pragma solidity 0.8.19;
 import "forge-std/Test.sol";
 import { console2 } from "forge-std/console2.sol";
 
-import {
-  RemoteOwner,
-  OriginChainIdZero,
-  LocalSenderNotExecutor,
-  OriginChainIdUnsupported,
-  OriginSenderNotOwner,
-  OwnerZeroAddress,
-  CallFailed,
-  LocalSenderNotPendingExecutor
-} from "../src/RemoteOwner.sol";
+import { RemoteOwner, OriginChainIdZero, LocalSenderNotExecutor, OriginChainIdUnsupported, OriginSenderNotOwner, OwnerZeroAddress, CallFailed, LocalSenderNotPendingExecutor } from "../src/RemoteOwner.sol";
 
 import { ExecutorZeroAddress } from "erc5164-interfaces/abstract/ExecutorAware.sol";
 
@@ -22,13 +13,12 @@ import { RemoteOwnerCallEncoder } from "../src/libraries/RemoteOwnerCallEncoder.
 /// @dev See the "Writing Tests" section in the Foundry Book if this is your first time with Forge.
 /// https://book.getfoundry.sh/forge/writing-tests
 contract RemoteOwnerTest is Test {
-
   event Received(address indexed from, uint256 value);
   event OwnershipOffered(address indexed pendingOwner);
   event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
   event PendingExecutorPermissionTransfer(address indexed pendingTrustedExecutor);
   event SetTrustedExecutor(address indexed previousExecutor, address indexed newExecutor);
-  
+
   RemoteOwner account;
 
   address originChainOwner;
@@ -53,7 +43,12 @@ contract RemoteOwnerTest is Test {
     recipientCalldata = abi.encodeWithSignature("getValue(uint256)", 42);
     vm.mockCall(recipient, recipientCalldata, abi.encode(1000));
 
-    executeData = abi.encodePacked(RemoteOwnerCallEncoder.encodeCalldata(recipient, 0, recipientCalldata), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    executeData = abi.encodePacked(
+      RemoteOwnerCallEncoder.encodeCalldata(recipient, 0, recipientCalldata),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      originChainOwner
+    );
   }
 
   function testConstructor() public {
@@ -79,7 +74,7 @@ contract RemoteOwnerTest is Test {
   function testReceiveEther() public {
     vm.expectEmit();
     emit Received(address(this), 1000);
-    (bool sent,) = address(account).call{value: 1000}(""); // send ether
+    (bool sent, ) = address(account).call{ value: 1000 }(""); // send ether
     assertEq(sent, true);
   }
 
@@ -103,13 +98,23 @@ contract RemoteOwnerTest is Test {
   }
 
   function testExecute_wrongChainId() public {
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.execute.selector, recipient, 0, recipientCalldata), bytes32(uint256(0x1234)), uint256(2), originChainOwner);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.execute.selector, recipient, 0, recipientCalldata),
+      bytes32(uint256(0x1234)),
+      uint256(2),
+      originChainOwner
+    );
     vm.expectRevert(abi.encodeWithSelector(OriginChainIdUnsupported.selector, 2));
     address(account).call(executeData);
   }
 
   function testExecute_OriginSenderNotOwner() public {
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.execute.selector, recipient, 0, recipientCalldata), bytes32(uint256(0x1234)), uint256(1), imposter);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.execute.selector, recipient, 0, recipientCalldata),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      imposter
+    );
     vm.expectRevert(abi.encodeWithSelector(OriginSenderNotOwner.selector, imposter));
     address(account).call(executeData);
   }
@@ -117,7 +122,12 @@ contract RemoteOwnerTest is Test {
   function testTransferOwnership_success() public {
     vm.expectEmit(true, true, true, true);
     emit OwnershipOffered(imposter);
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferOwnership.selector, imposter), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.transferOwnership.selector, imposter),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      originChainOwner
+    );
     (bool success, bytes memory returnData) = address(account).call(executeData);
     assertTrue(success, "was successful");
     assertEq(account.pendingOwner(), imposter);
@@ -130,27 +140,47 @@ contract RemoteOwnerTest is Test {
   }
 
   function testTransferOwnership_invalidSender() public {
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferOwnership.selector, imposter), bytes32(uint256(0x1234)), uint256(1), imposter);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.transferOwnership.selector, imposter),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      imposter
+    );
     (bool success, bytes memory returnData) = address(account).call(executeData);
     assertFalse(success, "failed");
     assertEq(returnData, abi.encodeWithSelector(OriginSenderNotOwner.selector, imposter));
   }
 
   function testTransferOwnership_newOwnerZeroAddress() public {
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferOwnership.selector, address(0)), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.transferOwnership.selector, address(0)),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      originChainOwner
+    );
     (bool success, bytes memory returnData) = address(account).call(executeData);
     assertFalse(success, "failed");
     assertEq(returnData, abi.encodeWithSelector(OwnerZeroAddress.selector));
   }
 
   function testClaimOwnership() public {
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferOwnership.selector, imposter), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.transferOwnership.selector, imposter),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      originChainOwner
+    );
     (bool success, bytes memory returnData) = address(account).call(executeData);
     assertTrue(success, "transfer success");
 
     vm.expectEmit(true, true, true, true);
     emit OwnershipTransferred(originChainOwner, imposter);
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.claimOwnership.selector), bytes32(uint256(0x1234)), uint256(1), imposter);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.claimOwnership.selector),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      imposter
+    );
     (success, returnData) = address(account).call(executeData);
     assertTrue(success, "claim success");
 
@@ -167,7 +197,12 @@ contract RemoteOwnerTest is Test {
   function testRenounceOwnership() public {
     vm.expectEmit(true, true, true, true);
     emit OwnershipTransferred(originChainOwner, address(0));
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.renounceOwnership.selector), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.renounceOwnership.selector),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      originChainOwner
+    );
     (bool success, bytes memory returnData) = address(account).call(executeData);
     assertTrue(success, "transfer success");
   }
@@ -181,7 +216,12 @@ contract RemoteOwnerTest is Test {
   function testTransferExecutorPermission_success() public {
     vm.expectEmit();
     emit PendingExecutorPermissionTransfer(executor2);
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferExecutorPermission.selector, executor2), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.transferExecutorPermission.selector, executor2),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      originChainOwner
+    );
     (bool success, bytes memory returnData) = address(account).call(executeData);
     assertTrue(success, "was successful");
     assertEq(account.trustedExecutor(), address(this));
@@ -195,27 +235,47 @@ contract RemoteOwnerTest is Test {
   }
 
   function testTransferExecutorPermission_invalidSender() public {
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferExecutorPermission.selector, executor2), bytes32(uint256(0x1234)), uint256(1), imposter);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.transferExecutorPermission.selector, executor2),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      imposter
+    );
     (bool success, bytes memory returnData) = address(account).call(executeData);
     assertFalse(success, "failed");
     assertEq(returnData, abi.encodeWithSelector(OriginSenderNotOwner.selector, imposter));
   }
 
   function testTransferExecutorPermission_newExecutorZeroAddress() public {
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferExecutorPermission.selector, address(0)), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.transferExecutorPermission.selector, address(0)),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      originChainOwner
+    );
     (bool success, bytes memory returnData) = address(account).call(executeData);
     assertFalse(success, "failed");
     assertEq(returnData, abi.encodeWithSelector(ExecutorZeroAddress.selector));
   }
 
   function testClaimExecutorPermission() public {
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferExecutorPermission.selector, executor2), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.transferExecutorPermission.selector, executor2),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      originChainOwner
+    );
     (bool success, bytes memory returnData) = address(account).call(executeData);
     assertTrue(success, "declaration success");
     assertEq(account.trustedExecutor(), address(this));
     assertEq(account.pendingTrustedExecutor(), address(executor2));
 
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.claimExecutorPermission.selector), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.claimExecutorPermission.selector),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      originChainOwner
+    );
     vm.expectEmit();
     emit SetTrustedExecutor(address(this), executor2);
     vm.startPrank(executor2);
@@ -233,15 +293,24 @@ contract RemoteOwnerTest is Test {
   }
 
   function testClaimExecutorPermission_OriginSenderNotOwner() public {
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.transferExecutorPermission.selector, executor2), bytes32(uint256(0x1234)), uint256(1), originChainOwner);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.transferExecutorPermission.selector, executor2),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      originChainOwner
+    );
     (bool success, bytes memory returnData) = address(account).call(executeData);
     assertTrue(success, "declaration success");
 
     vm.startPrank(executor2);
-    executeData = abi.encodePacked(abi.encodeWithSelector(account.claimExecutorPermission.selector), bytes32(uint256(0x1234)), uint256(1), imposter);
+    executeData = abi.encodePacked(
+      abi.encodeWithSelector(account.claimExecutorPermission.selector),
+      bytes32(uint256(0x1234)),
+      uint256(1),
+      imposter
+    );
     vm.expectRevert(abi.encodeWithSelector(OriginSenderNotOwner.selector, imposter));
     address(account).call(executeData);
     vm.stopPrank();
   }
-
 }

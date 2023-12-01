@@ -10,7 +10,7 @@ For example, this might be useful for a Governance system on Ethereum that wants
 Links
 
 - [EIP-5164](https://eips.ethereum.org/EIPS/eip-5164) on Ethereum.org
-- [ERC-5164 Implementation](https://github.com/GenerationSoftware/ERC5164), includes adapters for the native Optimism, Arbitrum and Polygon bridges.  [Audited by Code Arena](https://github.com/code-423n4/2022-12-pooltogether)
+- [ERC-5164 Implementation](https://github.com/GenerationSoftware/ERC5164), includes adapters for the native Optimism, Arbitrum and Polygon bridges. [Audited by Code Arena](https://github.com/code-423n4/2022-12-pooltogether)
 
 ## Development
 

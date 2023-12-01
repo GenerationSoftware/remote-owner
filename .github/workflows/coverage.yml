@@ -28,7 +28,7 @@ jobs:
           forge --version
           forge build --sizes
         id: build
-      
+
       - name: Run Forge test
         env:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}

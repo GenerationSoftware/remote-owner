@@ -10,26 +10,25 @@ import { RemoteOwner } from "../../src/RemoteOwner.sol";
 /// @dev See the "Writing Tests" section in the Foundry Book if this is your first time with Forge.
 /// https://book.getfoundry.sh/forge/writing-tests
 contract RemoteOwnerTest is Test {
+  RemoteOwnerCallEncoderWrapper wrapper;
 
-    RemoteOwnerCallEncoderWrapper wrapper;
+  address target;
 
-    address target;
+  RemoteOwner remoteOwner;
 
-    RemoteOwner remoteOwner;
+  function setUp() public {
+    wrapper = new RemoteOwnerCallEncoderWrapper();
+    target = makeAddr("target");
+    remoteOwner = RemoteOwner(payable(makeAddr("remoteOwner")));
+    vm.etch(address(remoteOwner), "remoteOwner");
+  }
 
-    function setUp() public {
-        wrapper = new RemoteOwnerCallEncoderWrapper();
-        target = makeAddr("target");
-        remoteOwner = RemoteOwner(payable(makeAddr("remoteOwner")));
-        vm.etch(address(remoteOwner), "remoteOwner");
-    }
-
-    function testEncode() public {
-        bytes memory recipientCalldata = abi.encodeWithSignature("getValue(uint256)", 42);
-        bytes memory encodedData = wrapper.encodeCalldata(target, 0, recipientCalldata);
-        assertEq(
-            encodedData,
-            abi.encodeWithSelector(RemoteOwner.execute.selector, target, 0, recipientCalldata)
-        );
-    }
+  function testEncode() public {
+    bytes memory recipientCalldata = abi.encodeWithSignature("getValue(uint256)", 42);
+    bytes memory encodedData = wrapper.encodeCalldata(target, 0, recipientCalldata);
+    assertEq(
+      encodedData,
+      abi.encodeWithSelector(RemoteOwner.execute.selector, target, 0, recipientCalldata)
+    );
+  }
 }
