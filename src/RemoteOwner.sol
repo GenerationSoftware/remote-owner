@@ -34,26 +34,25 @@ error CallFailed(bytes returnData);
 /// @author G9 Software Inc.
 /// @notice RemoteOwner allows a contract on one chain to control a contract on another chain.
 contract RemoteOwner is ExecutorAware {
-
   /* ============ Events ============ */
 
   /**
-    * @dev Emitted when `_pendingOwner` has been changed.
-    * @param pendingOwner new `_pendingOwner` address.
-    */
+   * @dev Emitted when `_pendingOwner` has been changed.
+   * @param pendingOwner new `_pendingOwner` address.
+   */
   event OwnershipOffered(address indexed pendingOwner);
 
   /**
-    * @dev Emitted when `_owner` has been changed.
-    * @param previousOwner previous `_owner` address.
-    * @param newOwner new `_owner` address.
-    */
+   * @dev Emitted when `_owner` has been changed.
+   * @param previousOwner previous `_owner` address.
+   * @param newOwner new `_owner` address.
+   */
   event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
   /**
-    * @dev Emitted when `_pendingExecutor` has been declared by the owner.
-    * @param pendingTrustedExecutor the pending trusted executor address.
-    */
+   * @dev Emitted when `_pendingExecutor` has been declared by the owner.
+   * @param pendingTrustedExecutor the pending trusted executor address.
+   */
   event PendingExecutorPermissionTransfer(address indexed pendingTrustedExecutor);
 
   /**
@@ -82,11 +81,7 @@ contract RemoteOwner is ExecutorAware {
   /**
    * @notice ownerReceiver constructor.
    */
-  constructor(
-    uint256 originChainId_,
-    address executor_,
-    address __owner
-  ) ExecutorAware(executor_) {
+  constructor(uint256 originChainId_, address executor_, address __owner) ExecutorAware(executor_) {
     if (__owner == address(0)) revert OwnerZeroAddress();
     if (originChainId_ == 0) revert OriginChainIdZero();
     _originChainId = originChainId_;
@@ -109,22 +104,22 @@ contract RemoteOwner is ExecutorAware {
    * @param data The calldata
    * @return The return data of the call
    */
-  function execute(address target, uint256 value, bytes calldata data) external onlyExecutorAndOriginChain onlyOwner returns (bytes memory) {
-    (bool success, bytes memory returnData) = target.call{ value: value }(data);
-    if (!success) revert CallFailed(returnData);
-    assembly {
-      return (add(returnData, 0x20), mload(returnData))
-    }
+  function execute(
+    address target,
+    uint256 value,
+    bytes calldata data
+  ) external onlyExecutorAndOriginChain onlyOwner returns (bytes memory) {
+    return _execute(target, value, data);
   }
 
   /**
-    * @notice Renounce ownership of the contract.
-    * @dev Leaves the contract without owner. It will not be possible to call
-    * `onlyOwner` functions anymore. Can only be called by the current owner.
-    *
-    * NOTE: Renouncing ownership will leave the contract without an owner,
-    * thereby removing any functionality that is only available to the owner.
-    */
+   * @notice Renounce ownership of the contract.
+   * @dev Leaves the contract without owner. It will not be possible to call
+   * `onlyOwner` functions anymore. Can only be called by the current owner.
+   *
+   * NOTE: Renouncing ownership will leave the contract without an owner,
+   * thereby removing any functionality that is only available to the owner.
+   */
   function renounceOwnership() external virtual onlyExecutorAndOriginChain onlyOwner {
     _setOwner(address(0));
   }
@@ -140,9 +135,9 @@ contract RemoteOwner is ExecutorAware {
   }
 
   /**
-  * @notice Allows the `_pendingOwner` address to finalize the transfer.
-  * @dev This function is only callable by the `_pendingOwner`.
-  */
+   * @notice Allows the `_pendingOwner` address to finalize the transfer.
+   * @dev This function is only callable by the `_pendingOwner`.
+   */
   function claimOwnership() external onlyExecutorAndOriginChain onlyPendingOwner {
     _setOwner(_pendingOwner);
     delete _pendingOwner;
@@ -154,7 +149,9 @@ contract RemoteOwner is ExecutorAware {
    * to complete the transfer.
    * @param _executor Address of the new executor
    */
-  function transferExecutorPermission(address _executor) external onlyExecutorAndOriginChain onlyOwner {
+  function transferExecutorPermission(
+    address _executor
+  ) external onlyExecutorAndOriginChain onlyOwner {
     if (_executor == address(0)) revert ExecutorZeroAddress();
     _pendingExecutor = _executor;
     emit PendingExecutorPermissionTransfer(_executor);
@@ -188,17 +185,17 @@ contract RemoteOwner is ExecutorAware {
   }
 
   /**
-    * @notice Gets current `_pendingOwner`.
-    * @return Current `_pendingOwner` address.
-    */
+   * @notice Gets current `_pendingOwner`.
+   * @return Current `_pendingOwner` address.
+   */
   function pendingOwner() external view virtual returns (address) {
     return _pendingOwner;
   }
 
   /**
-    * @notice Gets current `_pendingExecutor`.
-    * @return Current `_pendingExecutor` address.
-    */
+   * @notice Gets current `_pendingExecutor`.
+   * @return Current `_pendingExecutor` address.
+   */
   function pendingTrustedExecutor() external view virtual returns (address) {
     return _pendingExecutor;
   }
@@ -217,11 +214,31 @@ contract RemoteOwner is ExecutorAware {
   }
 
   /**
+   * @notice Executes a call on the target contract.
+   * @param target The address to call
+   * @param value Any eth value to pass along with the call
+   * @param data The calldata
+   * @return The return data of the call
+   */
+  function _execute(
+    address target,
+    uint256 value,
+    bytes calldata data
+  ) internal returns (bytes memory) {
+    (bool success, bytes memory returnData) = target.call{ value: value }(data);
+    if (!success) revert CallFailed(returnData);
+    assembly {
+      return(add(returnData, 0x20), mload(returnData))
+    }
+  }
+
+  /**
    * @notice Asserts that the caller is the 5164 executor, and that the origin chain id is correct.
    */
   modifier onlyExecutorAndOriginChain() {
     if (!isTrustedExecutor(msg.sender)) revert LocalSenderNotExecutor(msg.sender);
-    if (ExecutorParserLib.fromChainId() != _originChainId) revert OriginChainIdUnsupported(ExecutorParserLib.fromChainId());
+    if (ExecutorParserLib.fromChainId() != _originChainId)
+      revert OriginChainIdUnsupported(ExecutorParserLib.fromChainId());
     _;
   }
 
@@ -230,7 +247,8 @@ contract RemoteOwner is ExecutorAware {
    */
   modifier onlyPendingExecutorAndOriginChain() {
     if (msg.sender != _pendingExecutor) revert LocalSenderNotPendingExecutor(msg.sender);
-    if (ExecutorParserLib.fromChainId() != _originChainId) revert OriginChainIdUnsupported(ExecutorParserLib.fromChainId());
+    if (ExecutorParserLib.fromChainId() != _originChainId)
+      revert OriginChainIdUnsupported(ExecutorParserLib.fromChainId());
     _;
   }
 
@@ -238,7 +256,8 @@ contract RemoteOwner is ExecutorAware {
    * @notice Asserts that the 5164 sender matches the current owner
    */
   modifier onlyOwner() {
-    if (ExecutorParserLib.msgSender() != address(_owner)) revert OriginSenderNotOwner(ExecutorParserLib.msgSender());
+    if (ExecutorParserLib.msgSender() != address(_owner))
+      revert OriginSenderNotOwner(ExecutorParserLib.msgSender());
     _;
   }
 
@@ -246,7 +265,8 @@ contract RemoteOwner is ExecutorAware {
    * @notice Asserts that the 5164 sender matches the pending owner
    */
   modifier onlyPendingOwner() {
-    if (ExecutorParserLib.msgSender() != address(_pendingOwner)) revert OriginSenderNotPendingOwner(ExecutorParserLib.msgSender());
+    if (ExecutorParserLib.msgSender() != address(_pendingOwner))
+      revert OriginSenderNotPendingOwner(ExecutorParserLib.msgSender());
     _;
   }
 }
